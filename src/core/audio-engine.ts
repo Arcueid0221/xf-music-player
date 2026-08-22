@@ -1,4 +1,4 @@
-import type {SongInfo} from "../config/type.ts";
+import type {SongInfo} from "../config/type";
 export class AudioEngine {
 
 

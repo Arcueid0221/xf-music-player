@@ -6,3 +6,5 @@ export interface SongInfo {
     cover?: string,
     duration?: number,
 }
+
+export type MusicPlayMode = 'order' | 'single' | 'random'
