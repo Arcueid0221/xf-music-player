@@ -2,10 +2,14 @@ import {AudioEngine} from "./core/audio-engine";
 import {createStore} from "./core/store";
 import type {SongInfo, MusicPlayMode} from "./config/type";
 import {nextIndex, prevIndex} from "./core/playlist";
+import {WaveformRenderer} from "./render/components/waveform";
 
 export class XfMusicPlayer extends HTMLElement {
     private engine!: AudioEngine;
     private store!: ReturnType<typeof createStore>
+    private unsubscribe?: () => void
+    private waveform?: WaveformRenderer
+
     static get observedAttributes(): string[] {
         return ['mode', 'playlist', 'play-mode']
     }
@@ -15,10 +19,16 @@ export class XfMusicPlayer extends HTMLElement {
         //开隔离区，拿到shadowRoot
         const shadowRoot = this.attachShadow({mode: 'open'})
 
-        //建容器和engine
+        //建容器
         const container = document.createElement('div')
+        const canvas = document.createElement('canvas')
+
+        //把容器放到DOM
         shadowRoot.appendChild(container)
+        //初始化
         this.engine = new AudioEngine()
+        canvas.height = 80
+        canvas.width = 400
 
         //建store
         const songList: SongInfo[] = [
@@ -34,7 +44,7 @@ export class XfMusicPlayer extends HTMLElement {
         this.engine.load(songList[0])
 
         //订阅切歌
-        this.store.subscribe((state,prev) => {
+        this.unsubscribe = this.store.subscribe((state,prev) => {
             const song = state.playlist[state.currentIndex]
             if(state.currentIndex != prev.currentIndex){
                 this.engine.load(song)
@@ -43,10 +53,17 @@ export class XfMusicPlayer extends HTMLElement {
             }
         })
 
+
         //建按钮，绑容器
         const playBtn = document.createElement('button')
         playBtn.textContent = '播放'
-        playBtn.addEventListener('click',() => this.engine.play())
+        playBtn.addEventListener('click',() => {
+            this.engine.play()
+            // 临时在 index.ts 或 player-element 里：
+            const data =this.engine.getFrequencyData()
+            console.log(data)  // 应该是一串 0~255 的数字，不全为 0
+            console.log(this.engine.hasAnalyserData())  // true = 能画波形；false = 要降级
+        })
 
         const pauseBtn = document.createElement('button')
         pauseBtn.textContent = '暂停'
@@ -78,15 +95,27 @@ export class XfMusicPlayer extends HTMLElement {
             this.store.setState({ playMode: next })
             console.log(next)
         })
-            container.appendChild(playBtn)
-            container.appendChild(pauseBtn)
-            container.appendChild(nextBth)
-            container.appendChild(prevBth)
-            container.appendChild(modeBtn)
+
+        this.waveform = new WaveformRenderer(canvas)
+
+        container.appendChild(playBtn)
+        container.appendChild(pauseBtn)
+        container.appendChild(nextBth)
+        container.appendChild(prevBth)
+        container.appendChild(modeBtn)
+        container.appendChild(canvas)
 
 
         this.engine.onTimeUpdate((cur, dur) =>{
             console.log(cur, dur)
+        })
+
+        this.engine.onPlay(() => {
+            this.waveform?.start(() => this.engine.getFrequencyData())
+        })
+
+        this.engine.onPause(() =>{
+            this.waveform?.stop()
         })
 
     }
@@ -98,6 +127,8 @@ export class XfMusicPlayer extends HTMLElement {
     }
 
     disconnectedCallback(): void{
-
+        this.unsubscribe?.()      // ① 取消 store 订阅
+        this.waveform?.stop()     // ② 停止波形 rAF 循环
+        this.engine?.destroy()    // ③ 停止播放 + 关闭 AudioContext
     }
 }

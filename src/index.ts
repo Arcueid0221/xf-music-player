@@ -4,6 +4,5 @@ import {XfMusicPlayer} from "./player-element";
 if (!customElements.get('xf-music-player')) {
     customElements.define('xf-music-player', XfMusicPlayer)
 }
-
 // 导出类，方便别人用 new XfMusicPlayer() 或做类型标注
 export { XfMusicPlayer }
